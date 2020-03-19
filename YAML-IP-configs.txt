@@ -1,0 +1,136 @@
+This configuration was tested on Ubuntu 18.04 LTS Server, but should work on any *nix system that uses YAML based IP configurations.
+If you DON'T have physical access to the server, or a VSphere console, or backend server management console, you might want to test this on a server you do have access to before doing it to your production model.
+
+NetworkManager or Networkd can be the controller for the IP configuration on a Debian based *nix server.
+These examples use networkd for the IP configuration on an Ubuntu 18.04 LTS server with NO GUI.
+I prefer networkd at the time of this article.
+
+One important thing about YAML is that whitespaces count, these are not tabs, but 4 spaces if I'm not mistaken.
+Your text editor might convert to tab if it's not something like Notepad++ or Mousepad. I've seen on occassion where Notepad++ can use tabs as well so check your settings.
+
+If you do not have a yaml file in your /etc/netplan directory, you can create one with one of the following names. You can have multiple files. The lower the number, the higher the priority. This uses networkd, NOT NetworkManager.
+
+01-netcfg.yaml
+50-cloud-init.yaml
+
+I've seen one or the other depending on what options you chose during the Ubuntu installation, and sometimes neither.
+If run the following command, you can find your <interface name>, so this way it applies to your existing installation.
+command:  ipconfig -a
+
+
+
+The default DHCP YAML configuration will look something like this after your first boot if you have ONE interface using networkd. If you specified a static IP during Ubuntu 18.04 LTS server installation, you would see your IP information and your nameservers (DNS). If you only have one interface, and your static IP is configured, then you are ready to continue with Dev Notebook 0 for installation. Even if you have made it this far, and never set a static IP, you can still do it here. Your best option is to reboot the computer, once your settings are completed. I think DHCP4 is default if not specified
+
+network:
+    ethernets:
+        <interface name>:
+        addresses: []
+        dhcp4: true
+        dhcp6: false
+    version: 2
+
+Here is an example of a YAML IP configuration with a static IP and ONE interface using networkd, and your DNS servers were locally managed DNS servers in your Enterprise LAN network.
+The search domain name can be omitted if you don't have a company domain/AD group this needs to be apart of.
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets
+    <interface name>:
+        addresses: [ 192.168.25.50/24 ]
+        gateway4: 192.168.25.1
+        nameservers:
+            search: [ <your domain>.com ]
+            addresses:
+                - "192.168.25.4"
+                - "192.168.25.5"
+                - "8.8.8.8"
+            dhcp6: false
+
+If you have 2 interfaces or more interfaces, it will look similar to this, but during your installation, you will have specified which interface gets DHCP if you did not type in a static IP. Static IPs are recommended for ANY monitoring solution, otherwise your traps, syslog and NETFLOW could end up getting fed to the wrong server, and your devices will reject your SNMP requests in most cases if the IP address changes to what was initially set up.
+
+network:
+    version: 2
+    renderer: networkd
+    ethernets:
+      <interface name>:
+        addresses: [ 192.168.25.50/24 ]
+        gateway4: 192.168.25.1
+        nameservers:
+          search: [ <your domain>.com ]
+          addresses:
+              - "192.168.25.4"
+              - "192.168.25.5"
+              - "8.8.4.4"
+     <interface name>:
+         addresses: []
+         dhcp4: false
+         dhcp6: false
+
+
+Now let's say you want a teamed NIC, in which one interface is connected to one switch, and the other is connected to another switch, so if one of your switches dies, the other interface will take over as master. You must set up a bonded interface.
+Here is an example.
+
+
+network:
+    version: 2
+    renderer: networkd
+    ethernets:
+      <interface1>:
+        dhcp4: no
+        dhcp6: no
+      <interface2>:
+        dhcp4: no
+        dhcp6: no
+    bonds:
+      bond0:
+        interfaces: [ <interface1>, <interface2> ]
+        addresses: [ 192.168.25.50/24 ]
+        gateway4: 192.168.25.1
+        nameservers:
+          search: [ <your domain>.com ]
+          addresses:
+              - "192.168.25.4"
+              - "192.168.25.5"
+              - "8.8.4.4"
+      parameters:
+          mode: active-backup
+          mii-monitor-interval: 1
+          primary: <choose either interface1 or 2 and put that here>
+
+For any further examples, you'll need to look up in the Ubuntu forums, or check out the YAML site. Examples can vary slightly on syntax, but the above works and comes from an existing server.
+IP addresses are obviously faked for security purposes. After setting up your interfaces, the easiest thing to do is reboot your server.
+
+Once you have rebooted, run this command at the command at the CLI to check your interface config:
+
+ipconfig -a
+
+Whatever IP address you set as your static IP is now your URL IF you didn't set an A Record and PTR record on your DNS server.
+
+example from above bonded interface:  http://192.168.25.50:8980
+ -- or --
+
+it's the URL in your DNS server:  http://<URL.com>:8980
+
+If you setup a certificate, then obviously, you need to make sure port 443 inbound is allowed in your IP tables, and use https:// instead of http://.
+Per good security standards, you don't issue certificates to IP addresses, only domain based URLs, or if it's a self signed certificate, you would set the server name to the static IP in your /etc/hosts file.
+Here is an example of what you might see. You WILL still need a DNS entry on your DNS server, otherwise, https is a bit pointless.
+
+nms@opennms:/etc$ cat hosts
+127.0.0.1	localhost
+127.0.1.1	opennms
+192.168.25.50	opennms.mydomain-or-workgroup-name.com
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+
+Your namesevers(DNS) and domain(s) may also be in the /etc/resolv.conf file. Altering this file won't change it on boot, as it is dynamically built via glibc resolver.
+
+
+
+
+
+
+

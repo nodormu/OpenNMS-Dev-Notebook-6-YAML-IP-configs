@@ -1,2 +1,2 @@
-# OpenNMS-Dev-Notebook-6-YAML-IP-configs
-YAML configurations with notes on nameservers and DNS.
+This Dev note book is show some simple YAML configurations for setting up static IPs on *nix based servers.
+If you DON'T have physical access to the server, or a VSphere console, or backend server management console, you might want to test this on a server you do have access to before doing it to your production model.
